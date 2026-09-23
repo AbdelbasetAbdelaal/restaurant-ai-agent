@@ -1,6 +1,7 @@
+import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, ForeignKey, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -8,6 +9,17 @@ class Base(DeclarativeBase):
     """Base declarative class for all SQLAlchemy models."""
 
     pass
+
+
+class UUIDPrimaryKeyMixin:
+    """Provides a standard UUID primary key."""
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False,
+    )
 
 
 class TimestampMixin:
@@ -29,12 +41,13 @@ class TimestampMixin:
 class TenantMixin:
     """
     Mixin for multi-tenant support.
-    Prepares entities for Phase 2+ restaurant isolation.
+    Ensures tenant-owned entities are linked to a specific restaurant.
     """
 
-    restaurant_id: Mapped[str | None] = mapped_column(
-        String(64),
+    restaurant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("restaurants.id", ondelete="CASCADE"),
         index=True,
-        nullable=True,
+        nullable=False,
         doc="Tenant restaurant identifier for multi-tenant isolation",
     )

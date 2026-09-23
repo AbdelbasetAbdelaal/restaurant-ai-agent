@@ -27,11 +27,89 @@ class AppException(Exception):
 
 
 class NotFoundException(AppException):
-    def __init__(self, message: str = "Resource not found", details: Any | None = None):
+    def __init__(
+        self,
+        message: str = "Resource not found",
+        code: str = "NOT_FOUND",
+        details: Any | None = None,
+    ):
         super().__init__(
             message=message,
-            code="NOT_FOUND",
+            code=code,
             status_code=status.HTTP_404_NOT_FOUND,
+            details=details,
+        )
+
+
+class RestaurantNotFoundException(NotFoundException):
+    def __init__(
+        self,
+        message: str = "Restaurant not found",
+        details: Any | None = None,
+    ):
+        super().__init__(
+            message=message,
+            code="REST-001",
+            details=details,
+        )
+
+
+class CustomerNotFoundException(NotFoundException):
+    def __init__(
+        self,
+        message: str = "Customer not found",
+        details: Any | None = None,
+    ):
+        super().__init__(
+            message=message,
+            code="CUSTOMER-001",
+            details=details,
+        )
+
+
+class StaffNotFoundException(NotFoundException):
+    def __init__(
+        self,
+        message: str = "Staff member not found",
+        details: Any | None = None,
+    ):
+        super().__init__(
+            message=message,
+            code="STAFF-001",
+            details=details,
+        )
+
+
+class TenantMismatchException(AppException):
+    """
+    Raised when accessing a resource belonging to a different tenant.
+    Returns HTTP 404 to avoid leaking existence of cross-tenant resources.
+    """
+
+    def __init__(
+        self,
+        message: str = "Resource does not belong to restaurant",
+        details: Any | None = None,
+    ):
+        super().__init__(
+            message=message,
+            code="TENANT-001",
+            status_code=status.HTTP_404_NOT_FOUND,
+            details=details,
+        )
+
+
+class DuplicateResourceException(AppException):
+    def __init__(
+        self,
+        message: str = "Resource already exists",
+        code: str = "VALIDATION-001",
+        details: Any | None = None,
+    ):
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=status.HTTP_409_CONFLICT,
             details=details,
         )
 
