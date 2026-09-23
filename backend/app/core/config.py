@@ -1,6 +1,7 @@
 import json
+from typing import Self
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,7 +19,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DEBUG: bool = True
 
-    # Database & Cache
+    # Database & Cache (Local development defaults to localhost; Docker overrides via environment variables)
     DATABASE_URL: str = "postgresql+asyncpg://restaurant_user:restaurant_secure_password@localhost:5432/restaurant_db"
     REDIS_URL: str = "redis://localhost:6379/0"
 
@@ -51,6 +52,20 @@ class Settings(BaseSettings):
     @property
     def is_testing(self) -> bool:
         return self.APP_ENV.lower() in ("test", "testing")
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> Self:
+        """Enforce strict security hygiene in production environments."""
+        if self.is_production:
+            if self.DEBUG:
+                raise ValueError(
+                    "DEBUG mode must be disabled (DEBUG=False) in production."
+                )
+            if "change-this-to-a-secure-random-secret-key" in self.SECRET_KEY:
+                raise ValueError(
+                    "In production, SECRET_KEY must be explicitly set to a secure, random value."
+                )
+        return self
 
 
 settings = Settings()

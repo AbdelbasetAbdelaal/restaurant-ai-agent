@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, status
@@ -20,22 +21,52 @@ router = APIRouter(tags=["Health"])
     response_model=SystemHealthResponse,
     status_code=status.HTTP_200_OK,
     summary="System and Subsystem Health Check",
-    description="Returns detailed health metrics for Backend, PostgreSQL, and Redis.",
+    description=(
+        "Returns detailed health metrics for Backend, PostgreSQL, and Redis. "
+        "Subsystem checks are executed concurrently to minimize response latency."
+    ),
 )
 async def get_system_health() -> SystemHealthResponse:
-    # 1. Database check
-    db_healthy, db_message = await check_database_health()
+    """
+    Check system and subsystem health concurrently.
 
-    # 2. Redis check
-    redis_healthy, redis_message = await redis_service.check_health()
+    Health Status Semantics Policy:
+    - 'ok': Backend is operational and all dependencies (PostgreSQL, Redis) are Connected.
+    - 'degraded': Backend is operational, but one or more infrastructure dependencies are Offline.
+      The backend can still serve traffic that does not require the offline dependencies.
+    - 'down': Backend service itself cannot process requests or fatal runtime failure.
+    """
+    # Execute database and Redis health checks concurrently with exception isolation
+    results = await asyncio.gather(
+        check_database_health(),
+        redis_service.check_health(),
+        return_exceptions=True,
+    )
 
-    # Determine overall status
+    db_res, redis_res = results
+
+    # Safely evaluate database check result
+    if isinstance(db_res, tuple) and len(db_res) == 2:
+        db_healthy, db_message = db_res
+    elif isinstance(db_res, Exception):
+        db_healthy, db_message = False, f"Database check exception: {db_res}"
+    else:
+        db_healthy, db_message = False, "Unknown database health result"
+
+    # Safely evaluate Redis check result
+    if isinstance(redis_res, tuple) and len(redis_res) == 2:
+        redis_healthy, redis_message = redis_res
+    elif isinstance(redis_res, Exception):
+        redis_healthy, redis_message = False, f"Redis check exception: {redis_res}"
+    else:
+        redis_healthy, redis_message = False, "Unknown Redis health result"
+
+    # Determine overall system health based on semantic status policy
     if db_healthy and redis_healthy:
         overall_status = OverallStatusEnum.OK
-    elif db_healthy or redis_healthy:
-        overall_status = OverallStatusEnum.DEGRADED
     else:
-        overall_status = OverallStatusEnum.DOWN
+        # Backend is operational, but infrastructure dependencies are degraded/offline
+        overall_status = OverallStatusEnum.DEGRADED
 
     return SystemHealthResponse(
         status=overall_status,

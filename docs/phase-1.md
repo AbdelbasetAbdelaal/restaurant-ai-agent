@@ -12,34 +12,41 @@ This phase deliberately isolates infrastructural prerequisites from complex busi
 
 1. **Backend Infrastructure**:
    - FastAPI application configured with modular architecture.
-   - Pydantic Settings (`BaseSettings`) loading validated environment configurations.
+   - Pydantic Settings (`BaseSettings`) loading validated environment configurations with strict production security checks.
    - Structured JSON logging with request correlation IDs via `X-Request-ID`.
    - Global exception handling returning unified JSON error envelopes.
    - Root `/health`, versioned `/api/v1/health`, and `/api/health` endpoints.
    - CORS middleware configured for cross-origin frontend communication.
+   - Concurrent health checks via `asyncio.gather()` executing database and cache checks in parallel.
 
-2. **Database & Cache Abstractions**:
+2. **Semantic Health Status Policy**:
+   - `ok`: Backend operational, all persistence/caching dependencies connected.
+   - `degraded`: Backend operational, but one or more infrastructure dependencies offline (does not falsely claim backend is broken).
+   - `down`: Backend itself is unreachable or failing fatal runtime self-checks.
+
+3. **Database & Cache Abstractions**:
    - SQLAlchemy 2.0 async engine and session management.
    - Base declarative model with timestamps and `restaurant_id` tenancy mixin.
    - Database connection health checking routine.
    - Alembic configuration with async migration environment.
-   - Async `RedisService` wrapper with ping/health check verification.
+   - Async `RedisService` wrapper with ping/health check verification and Phase 2+ boundary stubs.
 
-3. **AI Provider Abstraction Framework**:
+4. **AI Provider Abstraction Framework**:
    - `AIProvider` protocol / abstract base class defining vendor-agnostic LLM contract.
    - Provider stubs: `OpenAIProvider`, `GroqProvider`, `HuggingFaceProvider`.
    - Dynamic `AIRouter` provider factory preventing business logic coupling to any single vendor.
    - Future AI tools directory and base interface definition (`backend/app/agents/tools/`).
 
-4. **Frontend Foundation**:
+5. **Frontend Foundation**:
    - Next.js App Router application in TypeScript and Tailwind CSS.
    - Centralized, typed API client abstraction (`lib/api-client.ts`).
    - Clean application shell with Error Boundary and loading indicators.
    - System Status dashboard displaying live health metrics for Backend, PostgreSQL, and Redis.
 
-5. **DevOps & Testing**:
+6. **Windows Local Development & DevOps**:
+   - First-class Windows local development mode without requiring Docker.
    - Containerized deployment via `docker-compose.yml` (backend, frontend, postgres, redis).
-   - Automated pytest test suite verifying configuration, health endpoints, database resilience, Redis fallback, error formatting, and AI provider interfaces.
+   - Automated pytest test suite (32 tests) verifying configuration, health concurrency, semantic statuses, database models, Redis service, error handling, and AI providers.
    - GitHub Actions CI workflow executing backend lint/tests and frontend production builds.
 
 ---

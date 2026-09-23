@@ -6,112 +6,166 @@ This guide details how to set up, run, test, and contribute to the **Restaurant 
 
 ## 1. Prerequisites
 
-- Python 3.12+ (tested with 3.12 - 3.14)
-- Node.js 18+ & npm
-- Docker and Docker Compose (optional for local mock testing, required for full containerized stack)
+- **Python**: 3.12+ (tested with Python 3.12, 3.13, 3.14)
+- **Node.js**: 18+ (tested with Node.js 20 and 24) & npm
+- **Docker & Docker Compose**: Optional for local development; required for full containerized stack.
 
 ---
 
-## 2. Environment Setup
+## 2. Supported Development Modes
 
-Copy `.env.example` to `.env` in the repository root:
+The architecture explicitly supports two development modes:
 
+### Mode A: Full Infrastructure Mode (Production-aligned)
+- **Stack**: PostgreSQL 16 + Redis 7 + FastAPI Backend + Next.js Frontend.
+- **When to use**: End-to-end integration testing, database migrations verification, or production builds.
+- **Run via**: Docker Compose (`docker compose up --build`) or local native PostgreSQL and Redis instances.
+- **Health status**: All components report `Connected`, overall status is `ok`.
+
+### Mode B: Backend / Frontend Local Development Mode (No Docker Required)
+- **Stack**: FastAPI Backend + Next.js Frontend.
+- **When to use**: Rapid local development on Windows or systems where Docker is unavailable.
+- **Resilience**: The backend and frontend start cleanly without crashing when PostgreSQL and Redis are absent.
+- **Health status**:
+  - Backend: `Connected`
+  - Database: `Offline` (connection timed out)
+  - Redis: `Offline` (connection timed out)
+  - Overall status: `degraded` (Backend is operational, but persistence/caching dependencies are offline)
+
+---
+
+## 3. Environment Setup
+
+Copy `.env.example` to `.env` in the repository root.
+
+### On Windows (Command Prompt - cmd.exe)
+```cmd
+copy .env.example .env
+```
+
+### On Windows (PowerShell)
+```powershell
+Copy-Item .env.example .env
+```
+
+### On Linux / macOS
 ```bash
 cp .env.example .env
 ```
 
-Ensure variables match your local environment.
+> [!IMPORTANT]
+> `.env` is ignored by Git and must never be committed. `.env.example` contains safe local-development defaults targeting `localhost:5432` and `localhost:6379`. Docker Compose automatically passes internal service hostnames (`postgres` and `redis`) through environment variables.
 
 ---
 
-## 3. Local Development (Without Docker)
+## 4. Running Locally on Windows (Without Docker)
 
-### 3.1 Backend Setup
-```bash
-# Create virtual environment
-python -m venv venv
+### 4.1 Backend Setup (Terminal 1)
 
-# Activate virtual environment
-# Windows:
-.\venv\Scripts\activate
-# Linux/macOS:
-source venv/bin/activate
+In Windows Command Prompt (`cmd.exe`):
+```cmd
+REM 1. Create Python virtual environment (if not already created)
+python -m venv .venv
 
-# Install dependencies
+REM 2. Activate virtual environment
+.venv\Scripts\activate
+
+REM 3. Install backend dependencies
 pip install -r backend/requirements.txt
 
-# Run backend development server
-cd backend
-uvicorn app.main:app --reload --port 8000
+REM 4. Start FastAPI server with live reload
+.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
 
-### 3.2 Frontend Setup
-```bash
+Or in PowerShell:
+```powershell
+.\.venv\Scripts\activate
+pip install -r backend/requirements.txt
+.\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --reload --port 8000
+```
+
+- **Backend API**: [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Health Check Endpoint**: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
+
+### 4.2 Frontend Setup (Terminal 2)
+
+In a separate Command Prompt or PowerShell window:
+```cmd
 cd frontend
 npm install
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) to view the system status dashboard.
+
+- **Frontend Status Dashboard**: [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## 4. Running with Docker Compose
+## 5. Running with Docker Compose (Mode A)
 
-To start the complete stack (PostgreSQL, Redis, Backend, Frontend):
+To run the complete containerized stack:
 
 ```bash
 docker compose up --build
 ```
 
-- Frontend status page: `http://localhost:3000`
-- Backend API: `http://localhost:8000`
-- API Health Check: `http://localhost:8000/api/v1/health`
-- OpenAPI Swagger Docs: `http://localhost:8000/docs`
-
-To shut down containers and tear down networks:
+To stop containers:
 ```bash
 docker compose down
 ```
 
 ---
 
-## 5. Running Tests & Quality Checks
+## 6. Health Check Semantics & Performance
 
-### 5.1 Backend Tests
-```bash
-cd backend
-pytest -v
+The health check endpoints (`/health`, `/api/health`, `/api/v1/health`) execute subsystem checks **concurrently** using `asyncio.gather()` with individual timeouts (2.0s).
+
+### Concurrency Target
+When both PostgreSQL and Redis are offline, the health check returns in approximately the duration of the longest single timeout (~2s), rather than waiting sequentially (~4s).
+
+### Status Policy
+| State | Backend | Database | Redis | Overall Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **All Operational** | `Connected` | `Connected` | `Connected` | `ok` |
+| **Partial Outage** | `Connected` | `Connected` | `Offline` | `degraded` |
+| **Partial Outage** | `Connected` | `Offline` | `Connected` | `degraded` |
+| **Local Mode (No DB/Cache)** | `Connected` | `Offline` | `Offline` | `degraded` |
+| **Fatal Backend Crash** | `Offline` | N/A | N/A | `down` / Unreachable |
+
+---
+
+## 7. Running Quality Checks & Tests
+
+### 7.1 Backend Tests (pytest)
+Runs 32 automated tests covering configuration, health concurrency, semantic statuses, database models, Redis service, error handling, and AI providers:
+```cmd
+.venv\Scripts\pytest -v backend/tests
 ```
 
-### 5.2 Linting & Formatting
-```bash
-# Lint backend
-ruff check backend/
-
-# Format backend
-ruff format backend/
-
-# Lint frontend
-cd frontend
-npm run lint
+### 7.2 Code Linting & Formatting (Ruff)
+```cmd
+.venv\Scripts\ruff check backend
+.venv\Scripts\ruff format --check backend
 ```
 
-### 5.3 Frontend Build Validation
-```bash
+To auto-format code:
+```cmd
+.venv\Scripts\ruff format backend
+```
+
+### 7.3 Frontend Production Build Validation
+```cmd
 cd frontend
 npm run build
 ```
 
 ---
 
-## 6. Database Migrations (Alembic)
+## 8. Optional Real Integration Verification
 
-When models are added in future phases:
-```bash
-cd backend
-# Generate migration
-alembic revision --autogenerate -m "create new tables"
-
-# Apply migration
-alembic upgrade head
-```
+When native PostgreSQL and Redis servers are installed locally:
+1. Start PostgreSQL on port `5432` with database `restaurant_db` and user `restaurant_user`.
+2. Start Redis on port `6379`.
+3. Start the backend: `.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --reload --port 8000`.
+4. Run `curl http://localhost:8000/api/v1/health` (or open in browser).
+5. Verify that `database` and `redis` report `"status": "Connected"`, and overall status switches to `"ok"`.

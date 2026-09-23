@@ -86,7 +86,11 @@ export default function StatusPage() {
               <Activity className="w-5 h-5 text-indigo-500" />
               System Status
             </h2>
-            {healthData && (
+            {isBackendOffline ? (
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-medium uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                Offline
+              </span>
+            ) : healthData ? (
               <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium uppercase tracking-wider ${
                 healthData.status === "ok"
                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
@@ -94,7 +98,7 @@ export default function StatusPage() {
               }`}>
                 {healthData.status}
               </span>
-            )}
+            ) : null}
           </div>
 
           {/* Core Subsystem Indicators */}

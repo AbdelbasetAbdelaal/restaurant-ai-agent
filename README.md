@@ -24,58 +24,74 @@ restaurant-ai-agent/
 
 ---
 
-## Quick Start with Docker
+## Windows Quick Start (Local Development - No Docker Needed)
 
-```bash
-# 1. Clone repository & configure environment
-cp .env.example .env
-
-# 2. Start full stack (PostgreSQL, Redis, Backend, Frontend)
-docker compose up --build
+### 1. Configure Environment
+In Windows Command Prompt (`cmd.exe`):
+```cmd
+copy .env.example .env
 ```
+*(Or in PowerShell: `Copy-Item .env.example .env`)*
 
-- **Frontend System Status**: [http://localhost:3000](http://localhost:3000)
-- **Backend API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Backend Health Check**: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
-
----
-
-## Local Development (Without Docker)
-
-### Backend
-```bash
-# Set up Python virtual environment
-python -m venv venv
-.\venv\Scripts\activate   # Windows
-# or: source venv/bin/activate # Linux/macOS
-
-# Install dependencies
+### 2. Start Backend (Terminal 1)
+```cmd
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r backend/requirements.txt
-
-# Run backend API
-cd backend
-uvicorn app.main:app --reload --port 8000
+.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
+- **Backend API**: [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Health Check**: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
 
-### Frontend
-```bash
+### 3. Start Frontend (Terminal 2)
+```cmd
 cd frontend
 npm install
 npm run dev
 ```
+- **System Status Dashboard**: [http://localhost:3000](http://localhost:3000)
+
+> [!TIP]
+> In local development mode without Docker, the backend and frontend run smoothly. The health dashboard accurately reflects that the Backend is `Connected`, while PostgreSQL and Redis are reported as `Offline` with an overall `degraded` readiness status.
+
+---
+
+## Docker Quick Start (Full Infrastructure Mode)
+
+For full stack execution (PostgreSQL 16 + Redis 7 + Backend + Frontend):
+
+```bash
+# 1. Create environment
+cp .env.example .env
+
+# 2. Build and run containers
+docker compose up --build
+```
+
+---
+
+## Health Check Semantics & Performance
+
+Subsystem health checks execute **concurrently** via `asyncio.gather()`, ensuring that `/api/v1/health` responds in ~2s (the longest single timeout) rather than waiting sequentially.
+
+| Status | Meaning |
+| :--- | :--- |
+| **`ok`** | Backend is operational and all dependencies (PostgreSQL, Redis) are `Connected`. |
+| **`degraded`** | Backend is operational, but one or both infrastructure dependencies are `Offline`. |
+| **`down`** | Backend service itself cannot process requests. |
 
 ---
 
 ## Testing & Quality Assurance
 
-```bash
-# Backend pytest suite
-cd backend
-pytest -v
+```cmd
+# Run backend pytest suite (32 tests)
+.venv\Scripts\pytest -v backend/tests
 
-# Backend code formatting & linting
-ruff check backend/
-ruff format backend/
+# Code linting and formatting checks
+.venv\Scripts\ruff check backend
+.venv\Scripts\ruff format --check backend
 
 # Frontend build verification
 cd frontend
@@ -87,5 +103,5 @@ npm run build
 ## Documentation
 
 - [Architecture Design](docs/architecture.md)
-- [Development Guide](docs/development.md)
+- [Development Guide (Windows & Docker)](docs/development.md)
 - [Phase 1 Scope & Boundary](docs/phase-1.md)
