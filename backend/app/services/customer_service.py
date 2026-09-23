@@ -1,6 +1,7 @@
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import (
@@ -30,17 +31,19 @@ class CustomerService:
                 f"Restaurant '{restaurant_id}' was not found."
             )
 
-        # 2. Check for duplicate phone within this restaurant tenant
-        existing = await db.execute(
-            select(Customer.id).where(
-                Customer.restaurant_id == restaurant_id,
-                Customer.phone == data.phone,
+        # 2. Check for duplicate phone within this restaurant tenant if phone is non-null.
+        # Multiple customers within the same restaurant are explicitly allowed to have phone = NULL.
+        if data.phone is not None:
+            existing = await db.execute(
+                select(Customer.id).where(
+                    Customer.restaurant_id == restaurant_id,
+                    Customer.phone == data.phone,
+                )
             )
-        )
-        if existing.scalar_one_or_none() is not None:
-            raise DuplicateResourceException(
-                f"Customer with phone '{data.phone}' already exists for this restaurant."
-            )
+            if existing.scalar_one_or_none() is not None:
+                raise DuplicateResourceException(
+                    f"Customer with phone '{data.phone}' already exists for this restaurant."
+                )
 
         customer = Customer(
             restaurant_id=restaurant_id,
@@ -51,9 +54,20 @@ class CustomerService:
             is_active=True,
         )
         db.add(customer)
-        await db.commit()
-        await db.refresh(customer)
-        return customer
+        try:
+            await db.commit()
+            await db.refresh(customer)
+            return customer
+        except IntegrityError as exc:
+            await db.rollback()
+            if (
+                "uq_customers_restaurant_phone" in str(exc)
+                or "unique" in str(exc).lower()
+            ):
+                raise DuplicateResourceException(
+                    f"Customer with phone '{data.phone}' already exists for this restaurant."
+                ) from exc
+            raise
 
     @staticmethod
     async def list_customers(
@@ -111,24 +125,36 @@ class CustomerService:
         """Update customer details under tenant isolation."""
         customer = await CustomerService.get_customer(db, restaurant_id, customer_id)
 
-        # Check phone uniqueness if phone is being changed
-        if data.phone and data.phone != customer.phone:
-            dup_check = await db.execute(
-                select(Customer.id).where(
-                    Customer.restaurant_id == restaurant_id,
-                    Customer.phone == data.phone,
-                    Customer.id != customer_id,
+        # Check phone uniqueness if phone is being updated to a non-null value
+        if "phone" in data.model_fields_set and data.phone is not None:
+            if data.phone != customer.phone:
+                dup_check = await db.execute(
+                    select(Customer.id).where(
+                        Customer.restaurant_id == restaurant_id,
+                        Customer.phone == data.phone,
+                        Customer.id != customer_id,
+                    )
                 )
-            )
-            if dup_check.scalar_one_or_none() is not None:
-                raise DuplicateResourceException(
-                    f"Customer with phone '{data.phone}' already exists for this restaurant."
-                )
+                if dup_check.scalar_one_or_none() is not None:
+                    raise DuplicateResourceException(
+                        f"Customer with phone '{data.phone}' already exists for this restaurant."
+                    )
 
         update_dict = data.model_dump(exclude_unset=True)
         for field, value in update_dict.items():
             setattr(customer, field, value)
 
-        await db.commit()
-        await db.refresh(customer)
-        return customer
+        try:
+            await db.commit()
+            await db.refresh(customer)
+            return customer
+        except IntegrityError as exc:
+            await db.rollback()
+            if (
+                "uq_customers_restaurant_phone" in str(exc)
+                or "unique" in str(exc).lower()
+            ):
+                raise DuplicateResourceException(
+                    f"Customer with phone '{data.phone}' already exists for this restaurant."
+                ) from exc
+            raise

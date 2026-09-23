@@ -56,7 +56,7 @@ erDiagram
         uuid id PK
         uuid restaurant_id FK "CASCADE"
         string name
-        string phone "scoped unique with restaurant_id"
+        string phone "nullable, scoped unique per restaurant when non-null"
         string email
         text notes
         boolean is_active "default true"
@@ -186,7 +186,17 @@ Register a customer scoped to this restaurant.
 }
 ```
 
-*Note: Submitting the same phone within the same restaurant returns `409 Conflict` (`VALIDATION-001`). Submitting the same phone for a different restaurant succeeds.*
+*Note: Customer phone rules:*
+- `Customer.phone` is **nullable**.
+- **Multiple NULL phones are allowed** within the same restaurant (e.g. walk-in patrons or web sessions without an upfront phone number).
+- **Non-null phone numbers are unique per restaurant**: Submitting a duplicate non-null phone within the same restaurant returns `409 Conflict` (`VALIDATION-001`).
+- The same non-null phone number is allowed across different restaurants.
+- Enforced at the database level via a PostgreSQL partial unique index:
+  ```sql
+  CREATE UNIQUE INDEX uq_customers_restaurant_phone
+  ON customers (restaurant_id, phone)
+  WHERE phone IS NOT NULL;
+  ```
 
 #### `GET /api/v1/restaurants/{id}/customers`
 List customers for this tenant.

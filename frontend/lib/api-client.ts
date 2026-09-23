@@ -116,7 +116,7 @@ export interface Customer {
   id: string;
   restaurant_id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   email?: string | null;
   notes?: string | null;
   is_active: boolean;
@@ -126,9 +126,9 @@ export interface Customer {
 
 export interface CustomerCreate {
   name: string;
-  phone: string;
-  email?: string;
-  notes?: string;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
 }
 
 export interface CustomerUpdate {

@@ -5,16 +5,16 @@ Revises: None
 Create Date: 2026-09-23 22:45:00.000000
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "0001_phase_2_foundation"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -66,7 +66,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("restaurant_id", sa.Uuid(), nullable=False),
         sa.Column("name", sa.String(length=255), nullable=False),
-        sa.Column("phone", sa.String(length=50), nullable=False),
+        sa.Column("phone", sa.String(length=50), nullable=True),
         sa.Column("email", sa.String(length=255), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default=sa.true(), nullable=False),
@@ -74,12 +74,19 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["restaurant_id"], ["restaurants.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("restaurant_id", "phone", name="uq_customers_restaurant_phone"),
     )
     op.create_index(op.f("ix_customers_restaurant_id"), "customers", ["restaurant_id"], unique=False)
     op.create_index(op.f("ix_customers_phone"), "customers", ["phone"], unique=False)
     op.create_index(op.f("ix_customers_email"), "customers", ["email"], unique=False)
     op.create_index("ix_customers_restaurant_id_phone", "customers", ["restaurant_id", "phone"], unique=False)
+    # PostgreSQL partial unique index: scoped unique phone when phone IS NOT NULL
+    op.create_index(
+        "uq_customers_restaurant_phone",
+        "customers",
+        ["restaurant_id", "phone"],
+        unique=True,
+        postgresql_where=sa.text("phone IS NOT NULL"),
+    )
 
     # 4. Create staff table
     op.create_table(
@@ -108,6 +115,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_staff_restaurant_id"), table_name="staff")
     op.drop_table("staff")
 
+    op.drop_index("uq_customers_restaurant_phone", table_name="customers", postgresql_where=sa.text("phone IS NOT NULL"))
     op.drop_index("ix_customers_restaurant_id_phone", table_name="customers")
     op.drop_index(op.f("ix_customers_email"), table_name="customers")
     op.drop_index(op.f("ix_customers_phone"), table_name="customers")

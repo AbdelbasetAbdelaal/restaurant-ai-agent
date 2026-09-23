@@ -95,7 +95,7 @@ erDiagram
         uuid id PK
         uuid restaurant_id FK "CASCADE on delete"
         string name
-        string phone "scoped unique with restaurant_id"
+        string phone "nullable, scoped unique per restaurant when non-null"
         string email
         text notes
         boolean is_active
@@ -121,8 +121,8 @@ erDiagram
 1. **UUID Primary Keys**: Every entity uses a cryptographically secure UUIDv4 (`UUIDPrimaryKeyMixin`).
 2. **UTC Timestamps**: Microsecond-precision UTC timestamps (`created_at`, `updated_at`) managed automatically.
 3. **Foreign Keys with Cascade**: All child tables (`restaurant_settings`, `customers`, `staff`) reference `restaurants.id` with `ondelete="CASCADE"`. Deleting a restaurant cleanly purges all its scoped records.
-4. **Scoped Uniqueness**:
-   - `customers`: `UniqueConstraint("restaurant_id", "phone", name="uq_customers_restaurant_phone")`. A customer phone number may exist in multiple distinct restaurants, but cannot be duplicated within a single restaurant tenant.
+4. **Scoped Uniqueness & Nullability**:
+   - `customers`: `phone` is **nullable**. Multiple customers in the same restaurant may have `phone = NULL`. A PostgreSQL partial unique index (`uq_customers_restaurant_phone ON customers (restaurant_id, phone) WHERE phone IS NOT NULL`) enforces that non-null phones are unique per restaurant, while identical phones across distinct restaurants are permitted without conflict.
    - `staff`: Indexed on `(restaurant_id, email)`. Email collision within the same restaurant is rejected at the service layer with `VALIDATION-001`.
    - `restaurants`: `slug` is globally unique and indexed.
 

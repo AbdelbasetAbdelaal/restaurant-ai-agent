@@ -505,7 +505,7 @@ export default function StatusPage() {
                             <p className="font-semibold text-slate-800 dark:text-slate-200">
                               {cust.name}
                             </p>
-                            <p className="text-slate-400 font-mono">{cust.phone}</p>
+                            <p className="text-slate-400 font-mono">{cust.phone || "No phone"}</p>
                           </div>
                           {cust.notes && (
                             <span className="text-[10px] text-slate-400 truncate max-w-[100px]">

@@ -81,15 +81,36 @@ def test_unique_constraints_and_indexes():
         for idx in settings_table.indexes
     )
 
-    # 3. customers scoped uniqueness (restaurant_id, phone)
+    # 3. customers phone is nullable and has scoped partial unique index (restaurant_id, phone) WHERE phone IS NOT NULL
     customers_table = tables["customers"]
-    has_scoped_unique = False
-    for uc in customers_table.constraints:
-        col_names = [col.name for col in uc.columns]
-        if "restaurant_id" in col_names and "phone" in col_names:
-            has_scoped_unique = True
+    assert customers_table.c.phone.nullable is True, "Customer.phone must be nullable"
+
+    # Verify no global unique constraint on phone
+    assert customers_table.c.phone.unique is not True, (
+        "Customer.phone must not have a global unique constraint"
+    )
+    for idx in customers_table.indexes:
+        if [c.name for c in idx.columns] == ["phone"]:
+            assert idx.unique is False, "Phone column index must not be unique globally"
+
+    # Verify partial unique index on (restaurant_id, phone)
+    partial_unique_idx = None
+    for idx in customers_table.indexes:
+        col_names = [col.name for col in idx.columns]
+        if col_names == ["restaurant_id", "phone"] and idx.unique:
+            partial_unique_idx = idx
             break
-    assert has_scoped_unique, "Missing unique constraint on (restaurant_id, phone)"
+
+    assert partial_unique_idx is not None, (
+        "Missing partial unique index on customers (restaurant_id, phone)"
+    )
+    # Verify postgresql_where dialect option
+    dialect_options = getattr(partial_unique_idx, "dialect_options", {})
+    pg_where = dialect_options.get("postgresql", {}).get("where")
+    assert pg_where is not None, (
+        "Partial unique index must have postgresql_where specified"
+    )
+    assert "phone IS NOT NULL" in str(pg_where)
 
     # 4. staff composite index on (restaurant_id, email)
     staff_table = tables["staff"]

@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Index, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TenantMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -18,7 +18,7 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin, TenantMixin):
     __tablename__ = "customers"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -31,10 +31,14 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin, TenantMixin):
     )
 
     __table_args__ = (
-        # Scoped uniqueness: the same phone number can exist across different restaurants,
-        # but must be unique within a single restaurant.
-        UniqueConstraint(
-            "restaurant_id", "phone", name="uq_customers_restaurant_phone"
+        # Partial unique index: scoped uniqueness per restaurant for non-null phone numbers.
+        # Multiple customers within the same restaurant may have phone = NULL.
+        Index(
+            "uq_customers_restaurant_phone",
+            "restaurant_id",
+            "phone",
+            unique=True,
+            postgresql_where=text("phone IS NOT NULL"),
         ),
         Index("ix_customers_restaurant_id_phone", "restaurant_id", "phone"),
     )

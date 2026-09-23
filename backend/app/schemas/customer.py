@@ -6,8 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class CustomerBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Customer name")
-    phone: str = Field(
-        ..., min_length=3, max_length=50, description="Customer phone number"
+    phone: str | None = Field(
+        None, min_length=3, max_length=50, description="Optional customer phone number"
     )
     email: str | None = Field(
         None, max_length=255, description="Optional customer email"
@@ -31,9 +31,9 @@ class CustomerResponse(BaseModel):
     id: uuid.UUID
     restaurant_id: uuid.UUID
     name: str
-    phone: str
-    email: str | None
-    notes: str | None
+    phone: str | None = None
+    email: str | None = None
+    notes: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
