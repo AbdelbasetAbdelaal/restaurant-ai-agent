@@ -1,0 +1,87 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: restaurant_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-restaurant_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-restaurant_secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-restaurant_db}
+    ports:
+      # Exposed for local development convenience; restrict in production
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-restaurant_user} -d ${POSTGRES_DB:-restaurant_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - restaurant_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: restaurant_redis
+    restart: unless-stopped
+    ports:
+      # Exposed for local development convenience; restrict in production
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - restaurant_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: restaurant_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_NAME: "Restaurant AI Agent"
+      APP_ENV: ${APP_ENV:-development}
+      DEBUG: ${DEBUG:-True}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-restaurant_user}:${POSTGRES_PASSWORD:-restaurant_secure_password}@postgres:5432/${POSTGRES_DB:-restaurant_db}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-change-this-to-a-secure-random-secret-key-in-production}
+      CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - restaurant_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: restaurant_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    networks:
+      - restaurant_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  restaurant_network:
+    driver: bridge
